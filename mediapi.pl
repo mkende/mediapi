@@ -29,21 +29,22 @@ $wnd->g_grid_rowconfigure(0, -weight => 1);
 # Useful link: https://en.wikipedia.org/wiki/Media_control_symbols
 Tkx::ttk__style_configure('Unicode.TButton', -font => 'Unifont 15');
 
-$media_control_frame->g_grid_columnconfigure(0, -weight => 1, -pad => 20);
-$media_control_frame->g_grid_columnconfigure(1, -weight => 1, -pad => 20);
-$media_control_frame->g_grid_rowconfigure(0, -weight => 1, -pad => 20);
-$media_control_frame->g_grid_rowconfigure(1, -weight => 1, -pad => 20);
+$media_control_frame->g_grid_columnconfigure(0, -weight => 1);
+$media_control_frame->g_grid_columnconfigure(1, -weight => 1);
+$media_control_frame->g_grid_rowconfigure(0, -weight => 1);
+$media_control_frame->g_grid_rowconfigure(1, -weight => 1);
 
 my $play_btn = $media_control_frame->new_ttk__button(-text => '⏵', -style => 'Unicode.TButton');
-$play_btn->g_grid(-column => 0, -row => 0, -sticky => 'nswe');
+$play_btn->g_grid(-column => 0, -row => 0, -sticky => 'nswe', -padx => 10, -pady => 10);
 my $pause_btn = $media_control_frame->new_ttk__button(-text => '⏸', -style => 'Unicode.TButton');
-$pause_btn->g_grid(-column => 1, -row => 0, -sticky => 'nswe');
+$pause_btn->g_grid(-column => 1, -row => 0, -sticky => 'nswe', -padx => 10, -pady => 10);
 my $prev_btn = $media_control_frame->new_ttk__button(-text => '⏮', -style => 'Unicode.TButton');
-$prev_btn->g_grid(-column => 0, -row => 1, -sticky => 'nswe');
+$prev_btn->g_grid(-column => 0, -row => 1, -sticky => 'nswe', -padx => 10, -pady => 10);
 my $next_btn = $media_control_frame->new_ttk__button(-text => '⏭', -style => 'Unicode.TButton');
-$next_btn->g_grid(-column => 1, -row => 1, -sticky => 'nswe');
+$next_btn->g_grid(-column => 1, -row => 1, -sticky => 'nswe', -padx => 10, -pady => 10);
 
-Tkx::update();
-print "Current window geometry: ".$wnd->g_winfo_geometry()."\n";
+# This remove the focus and "active" decoration of the button when they are selected.
+# We might want some kind of feedback that they were selected though.
+Tkx::bind('TButton', '<FocusIn>', [sub { $wnd->g_focus(); Tkx::widget->new($_[0])->state('!active'); }, Tkx::Ev('%W')]);
 
 Tkx::MainLoop();

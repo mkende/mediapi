@@ -7,6 +7,7 @@ BEGIN {
     $ENV{DISPLAY} //= ':0';
 }
 
+use IPC::Run;
 use Tkx;
 use X11::Protocol;
 
@@ -44,13 +45,32 @@ $media_control_frame->g_grid_columnconfigure(1, -weight => 1);
 $media_control_frame->g_grid_rowconfigure(0, -weight => 1);
 $media_control_frame->g_grid_rowconfigure(1, -weight => 1);
 
-my $play_btn = $media_control_frame->new_ttk__button(-text => '⏵', -style => 'Unicode.TButton');
+my $vlc_in;
+my $vlc = IPC::Run::start ['vlc', '--intf', 'rc'], $vlc_in;
+
+# It’s unclear what is the default volume and what is the real max level that can
+# be set. So, for now, we do nothing.
+
+sub pump_vlc {
+    print "pumping: $vlc_in\n";
+    IPC::Run::pump $vlc;
+    print "pump! ($vlc_in)\n";
+    Tkx::after('idle', \&pump_vlc) if length $vlc_in;
+}
+
+sub send_cmd {
+    my ($cmd) = @_;
+    $vlc_in = $cmd."\n";
+    pump_vlc();
+}
+
+my $play_btn = $media_control_frame->new_ttk__button(-text => '⏵', -style => 'Unicode.TButton', -command => sub { send_cmd('add cdda:///dev/cdrom') });
 $play_btn->g_grid(-column => 0, -row => 0, -sticky => 'nswe', -padx => 10, -pady => 10);
-my $pause_btn = $media_control_frame->new_ttk__button(-text => '⏸', -style => 'Unicode.TButton');
+my $pause_btn = $media_control_frame->new_ttk__button(-text => '⏸', -style => 'Unicode.TButton', -command => sub { send_cmd('pause') });
 $pause_btn->g_grid(-column => 1, -row => 0, -sticky => 'nswe', -padx => 10, -pady => 10);
-my $prev_btn = $media_control_frame->new_ttk__button(-text => '⏮', -style => 'Unicode.TButton');
+my $prev_btn = $media_control_frame->new_ttk__button(-text => '⏮', -style => 'Unicode.TButton', -command => sub { send_cmd('prev') });
 $prev_btn->g_grid(-column => 0, -row => 1, -sticky => 'nswe', -padx => 10, -pady => 10);
-my $next_btn = $media_control_frame->new_ttk__button(-text => '⏭', -style => 'Unicode.TButton');
+my $next_btn = $media_control_frame->new_ttk__button(-text => '⏭', -style => 'Unicode.TButton', -command => sub { send_cmd('next') });
 $next_btn->g_grid(-column => 1, -row => 1, -sticky => 'nswe', -padx => 10, -pady => 10);
 
 # This remove the focus and "active" decoration of the button when they are selected.

@@ -8,6 +8,16 @@ BEGIN {
 }
 
 use Tkx;
+use X11::Protocol;
+
+my ($screen_x, $screen_y);
+{
+    my $X = X11::Protocol->new();
+    $screen_x = $X->{screens}[0]{width_in_pixels} // 320;
+    $screen_y = $X->{screens}[0]{height_in_pixels} // 240;
+}
+
+open my $pigpio, '>', '/dev/pigpio';
 
 my $wnd = Tkx::widget->new('.');
 
@@ -17,7 +27,7 @@ my $wnd = Tkx::widget->new('.');
 $wnd->g_wm_attribute(-fullscreen => 1, -topmost => 1);
 $wnd->g_wm_resizable(0, 0);
 $wnd->configure(-cursor => 'none');
-$wnd->g_wm_geometry('320x240');
+$wnd->g_wm_geometry("${screen_x}x${screen_y}");
 
 my $media_control_frame = $wnd->new_ttk__frame(-borderwidth => 5); # The border is here only to debug
 $media_control_frame->g_grid(-column => 0, -row => 0, -sticky => 'nswe');
@@ -46,5 +56,8 @@ $next_btn->g_grid(-column => 1, -row => 1, -sticky => 'nswe', -padx => 10, -pady
 # This remove the focus and "active" decoration of the button when they are selected.
 # We might want some kind of feedback that they were selected though.
 Tkx::bind('TButton', '<FocusIn>', [sub { $wnd->g_focus(); Tkx::widget->new($_[0])->state('!active'); }, Tkx::Ev('%W')]);
+
+# The commands are documented at https://abyz.me.uk/rpi/pigpio/pigs.html
+syswrite $pigpio, "w 18 1\n";  # Switch on the backlight of the screen.
 
 Tkx::MainLoop();

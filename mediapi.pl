@@ -78,6 +78,8 @@ $next_btn->g_grid(-column => 1, -row => 1, -sticky => 'nswe', -padx => 10, -pady
 Tkx::bind('TButton', '<FocusIn>', [sub { $wnd->g_focus(); Tkx::widget->new($_[0])->state('!active'); }, Tkx::Ev('%W')]);
 
 # The commands are documented at https://abyz.me.uk/rpi/pigpio/pigs.html
-syswrite $pigpio, "w 18 1\n";  # Switch on the backlight of the screen.
+# For now we don’t have a gpio for that as 18 is used by the I2S audio, we need
+# to route another one to that pin on the screen.
+# syswrite $pigpio, "w 18 1\n";  # Switch on the backlight of the screen.
 
 Tkx::MainLoop();

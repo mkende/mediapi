@@ -11,6 +11,8 @@ use IPC::Run;
 use Tkx;
 use X11::Protocol;
 
+
+
 my ($screen_x, $screen_y);
 {
     my $X = X11::Protocol->new();
@@ -46,6 +48,7 @@ $media_control_frame->g_grid_rowconfigure(0, -weight => 1);
 $media_control_frame->g_grid_rowconfigure(1, -weight => 1);
 
 my $vlc_in;
+# my $vlc = IPC::Run::start ['vlc', '--intf', 'rc', '--alsa-audio-device', 'dac'], $vlc_in;
 my $vlc = IPC::Run::start ['vlc', '--intf', 'rc'], $vlc_in;
 
 # It’s unclear what is the default volume and what is the real max level that can

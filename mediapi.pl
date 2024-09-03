@@ -134,7 +134,7 @@ sub get_status_when_playing {
     } else {
       refresh_status_data();
       if (time() > $last_playing + 20 * 60) {
-        system('sudo shutdown -now');
+        system('sudo shutdown now');
       }
     }
   } else {

@@ -4,20 +4,21 @@ use warnings;
 use utf8;
 
 BEGIN {
-    $ENV{DISPLAY} //= ':0';
+  $ENV{DISPLAY} //= ':0';
 }
 
 use IPC::Run;
 use Tkx;
 use X11::Protocol;
 
+$| = 1;  # auto-flush
 
 
 my ($screen_x, $screen_y);
 {
-    my $X = X11::Protocol->new();
-    $screen_x = $X->{screens}[0]{width_in_pixels} // 320;
-    $screen_y = $X->{screens}[0]{height_in_pixels} // 240;
+  my $X = X11::Protocol->new();
+  $screen_x = $X->{screens}[0]{width_in_pixels} // 320;
+  $screen_y = $X->{screens}[0]{height_in_pixels} // 240;
 }
 
 open my $pigpio, '>', '/dev/pigpio';
@@ -48,23 +49,149 @@ $media_control_frame->g_grid_rowconfigure(0, -weight => 1);
 $media_control_frame->g_grid_rowconfigure(1, -weight => 1);
 
 my $vlc_in;
+my $vlc_out;
 # my $vlc = IPC::Run::start ['vlc', '--intf', 'rc', '--alsa-audio-device', 'dac'], $vlc_in;
-my $vlc = IPC::Run::start ['vlc', '--intf', 'rc'], $vlc_in;
+my $vlc = IPC::Run::start ['vlc', '--intf', 'rc'], $vlc_in, \$vlc_out;
+
+$vlc_in = '';
+$vlc_out = '';
 
 # It’s unclear what is the default volume and what is the real max level that can
 # be set. So, for now, we do nothing.
 
-sub pump_vlc {
-    print "pumping: $vlc_in\n";
-    IPC::Run::pump $vlc;
-    print "pump! ($vlc_in)\n";
-    Tkx::after('idle', \&pump_vlc) if length $vlc_in;
-}
+my $cmd_sent = 0;
+my $cmd_read = 0;
+my %cmd_cb;
 
 sub send_cmd {
-    my ($cmd) = @_;
-    $vlc_in = $cmd."\n";
-    pump_vlc();
+  my ($cmd, $sub) = @_;
+  if ($cmd_read < $cmd_sent) {
+    # In theory we could send multiple command. Unfortunately, in practice, VLC
+    # will sometime answer with multiple answers in a row, without the
+    # separating carret. So let’s slow down.
+    Tkx::after('idle', sub { send_cmd($cmd, $sub) });
+    return;
+  }
+  $vlc_in .= $cmd."\n" if defined $cmd;
+  $cmd_sent++;
+  print "Sending command ${cmd_sent}\n";
+  if (defined $sub) {
+    $cmd_cb{$cmd_sent} = $sub;
+  }
+  pump_vlc_in();
+}
+
+sub pump_vlc_in {
+  print "pumping: $vlc_in\n";
+  IPC::Run::pump $vlc if length $vlc_in;
+  print "pump! ($vlc_in)\n";
+  if (length $vlc_in) {
+    Tkx::after('idle', \&pump_vlc_in);
+  } else {
+    pump_vlc_out();
+  }
+}
+
+sub pump_vlc_out {
+  IPC::Run::pump_nb $vlc;
+  print "pumping (read): -->${vlc_out}<--\n";
+  if ($vlc_out =~ m/^> /m) {
+    $cmd_read++;
+    my $cmd_out = substr $vlc_out, 0, $-[0];
+    substr $vlc_out, 0, $+[0], '';
+    print "Read command output (${cmd_read})\n";
+    if (my $cb = delete $cmd_cb{$cmd_read}) {
+      $cb->($cmd_out);
+    }
+  }
+  Tkx::after('idle', \&pump_vlc_out) if $cmd_read < $cmd_sent;
+}
+
+sub get_status {
+  send_cmd('is_playing', \&get_status_when_playing);
+}
+
+my $is_playing = 0;
+my ($track_nb, $track_total, $track_time, $track_length);
+my $track_status = 'not playing';
+
+my $last_playing = time();
+
+sub get_status_when_playing {
+  my ($data) = @_;
+  if ($data =~ m/(\d+)/) {
+    $is_playing = $1;
+    print "is_playing: '${is_playing}'\n";
+    if ($is_playing) {
+      $last_playing = time();
+      # We stage the command as, send_cmd will anyway waits for an answer to be
+      # received before sending the next command. This increase the chance that
+      # they are processed in order, although this is not an important
+      # requirement (things will still work if they don’t).
+      send_cmd('info', \&read_track_info);
+      Tkx::after(5, sub { send_cmd('get_length', \&read_track_length) });
+      Tkx::after(10, sub { send_cmd('get_time', \&read_track_time) });
+    } else {
+      refresh_status_data();
+      if (time() > $last_playing + 20 * 60) {
+        system('sudo shutdown -now');
+      }
+    }
+  } else {
+    $is_playing = 0;
+    refresh_status_data();
+  }
+}
+
+sub read_track_info {
+  my ($info) = @_;
+  if ($info =~ m/track_number: (\d+)/) {
+    $track_nb = $1;
+    print "track_nb: '${track_nb}'\n";
+  } else {
+    undef $track_nb;
+  }
+  if ($info =~ m/track_total: (\d+)/) {
+    $track_total = $1;
+    print "track_total: '${track_total}'\n";
+  } else {
+    undef $track_total;
+  }
+}
+
+sub read_track_length {
+  my ($data) = @_;
+  if ($data =~ m/(\d+)/) {
+    $track_length = $1;
+  } else {
+    undef $track_length;
+  }
+  print "track_length: '${track_length}'\n";
+}
+
+sub read_track_time {
+  my ($data) = @_;
+  if ($data =~ m/(\d+)/) {
+    $track_time = $1;
+  } else {
+    undef $track_time;
+  }
+  print "track_time: '${track_time}'\n";
+  # This is not necessarily the last of our callback, but if it isn’t it’s not
+  # a big deal.
+  refresh_status_data();
+}
+
+sub refresh_status_data {
+  if (!$is_playing) {
+    $track_status = 'not playing';
+  } else {
+    $track_status = sprintf 'track %s/%s, time %s / %s', 
+        ($track_nb // '??'), ($track_total // '??'),
+        (defined $track_time ? sprintf('%d:%02d', $track_time / 60, $track_time % 60) : '??'),
+        (defined $track_length ? sprintf('%d:%02d', $track_length / 60, $track_length % 60) : '??'),
+  }
+  Tkx::after(200, \&get_status);
 }
 
 my $play_btn = $media_control_frame->new_ttk__button(-text => '⏵', -style => 'Unicode.TButton', -command => sub { send_cmd('add cdda:///dev/cdrom') });
@@ -75,6 +202,8 @@ my $prev_btn = $media_control_frame->new_ttk__button(-text => '⏮', -style => '
 $prev_btn->g_grid(-column => 0, -row => 1, -sticky => 'nswe', -padx => 10, -pady => 10);
 my $next_btn = $media_control_frame->new_ttk__button(-text => '⏭', -style => 'Unicode.TButton', -command => sub { send_cmd('next') });
 $next_btn->g_grid(-column => 1, -row => 1, -sticky => 'nswe', -padx => 10, -pady => 10);
+my $status_label = $media_control_frame->new_ttk__label(-textvariable => \$track_status, -anchor => 'center');
+$status_label->g_grid(-column => 0, -columnspan => 2, -row => 2, -sticky => 'nswe');
 
 # This remove the focus and "active" decoration of the button when they are selected.
 # We might want some kind of feedback that they were selected though.
@@ -85,4 +214,10 @@ Tkx::bind('TButton', '<FocusIn>', [sub { $wnd->g_focus(); Tkx::widget->new($_[0]
 # to route another one to that pin on the screen.
 # syswrite $pigpio, "w 18 1\n";  # Switch on the backlight of the screen.
 
+#Tkx::bind('.', '<Create>', sub {
+Tkx::after('idle', sub {
+  send_cmd();  # Used to read the greeting message until the first caret >.
+  get_status();
+});
+print "Starting main loop\n";
 Tkx::MainLoop();

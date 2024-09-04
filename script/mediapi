@@ -1,3 +1,5 @@
+#!/usr/bin/perl
+
 use strict;
 use warnings;
 
@@ -196,11 +198,14 @@ sub refresh_status_data {
 
 my $play_btn = $media_control_frame->new_ttk__button(-text => '⏵', -style => 'Unicode.TButton', -command => sub { send_cmd('add cdda:///dev/cdrom') });
 $play_btn->g_grid(-column => 0, -row => 0, -sticky => 'nswe', -padx => 10, -pady => 10);
-my $pause_btn = $media_control_frame->new_ttk__button(-text => '⏸', -style => 'Unicode.TButton', -command => sub { send_cmd('pause') });
+my $pause_btn = $media_control_frame->new_ttk__button(-text => '⏸', -style => 'Unicode.TButton',
+                                                      -command => sub { send_cmd('pause') });
 $pause_btn->g_grid(-column => 1, -row => 0, -sticky => 'nswe', -padx => 10, -pady => 10);
-my $prev_btn = $media_control_frame->new_ttk__button(-text => '⏮', -style => 'Unicode.TButton', -command => sub { send_cmd('prev') });
+my $prev_btn = $media_control_frame->new_ttk__button(-text => '⏮', -style => 'Unicode.TButton',
+                                                     -command => sub { send_cmd('prev') });
 $prev_btn->g_grid(-column => 0, -row => 1, -sticky => 'nswe', -padx => 10, -pady => 10);
-my $next_btn = $media_control_frame->new_ttk__button(-text => '⏭', -style => 'Unicode.TButton', -command => sub { send_cmd('next') });
+my $next_btn = $media_control_frame->new_ttk__button(-text => '⏭', -style => 'Unicode.TButton',
+                                                     -command => sub { send_cmd('next') });
 $next_btn->g_grid(-column => 1, -row => 1, -sticky => 'nswe', -padx => 10, -pady => 10);
 my $status_label = $media_control_frame->new_ttk__label(-textvariable => \$track_status, -anchor => 'center');
 $status_label->g_grid(-column => 0, -columnspan => 2, -row => 2, -sticky => 'nswe');
